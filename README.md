@@ -1,12 +1,16 @@
 # Z-Guard 🛡️
 
-A lightweight, zero-dependency, neuro-symbolic validation and hallucination mitigation library for **Agentic AI** workflows.
+> Keep your AI agents from lying to users or sending garbage parameters to your APIs.
 
-Z-Guard intercepts AI responses at runtime and guarantees factual alignment and execution safety by wrapping the LLM in a rigid verification pipeline.
+Let's be real: LLMs are great, but they hallucinate. They will confidently invent database keys, try to call payment APIs with negative numbers, or cite documents that don't exist.
+
+**Z-Guard** is a tiny, zero-dependency TypeScript library that acts as a runtime firewall for your AI agents. It intercepts whatever your LLM generates, validates the facts against your grounding documents, checks proposed tool arguments against strict schemas, and blocks hallucinations *before* they escape to your users or execute on your servers.
+
+And best of all: **Z-Guard is a single file**. You can install it via npm, or literally just copy-paste [src/index.ts](file:///Users/gowthamcherukuri/.gemini/antigravity/worktrees/hallucinations/research-mitigate-ai-hallucinations/zguard/src/index.ts) directly into your project. No bloat, no complex setups.
 
 ---
 
-## 📦 Installation
+## 📦 Install
 
 ```bash
 npm install @z-guard/core zod
@@ -14,48 +18,49 @@ npm install @z-guard/core zod
 
 ---
 
-## 🛠️ How it Works
+## 🛠️ How to Use It
 
-Z-Guard verifies your AI responses on two paths:
+Z-Guard operates on two paths:
 
-1. **Factual Verification (NLI)**: Checks if the agent's statements are logically supported by your grounding documents.
-2. **Symbolic Verification (Zod)**: Prevents structural hallucinations by validating tool/action parameters before execution.
+1.  **Factual Check**: Did the LLM make up statements that aren't in the cited sources?
+2.  **Symbolic Check**: Did the LLM output valid tool arguments?
 
----
+Here is how you use them.
 
-## 💻 Quick Examples
+### 1. Spotting Factual Hallucinations
 
-### 1. Factual Grounding Check
-
-Verify claims against a set of grounding context documents. Falls back to keyword heuristics if no custom NLI model is provided.
+Give Z-Guard your grounding context documents. It will check if the claims in the AI response match the facts. If you don't supply a custom NLI model, Z-Guard uses a basic keyword-matching fallback.
 
 ```typescript
 import { FactualVerifier } from '@z-guard/core';
 
-const sources = [
-  { id: 'doc_01', content: 'Acme Corp Q1 revenue was $15.4M, representing 12% YoY growth.' }
+// Your ground truth facts (from a DB or Vector search)
+const documents = [
+  { id: 'policy_01', content: 'Refunds are allowed within 30 days. Max refund is $500.' }
 ];
 
-const verifier = new FactualVerifier(sources);
+const verifier = new FactualVerifier(documents);
 
-// Valid Claim
+// Case A: Valid claim
 const check1 = await verifier.verifyCitation({
-  citationId: 'doc_01',
-  factualClaim: 'Acme Corp Q1 revenue was 15.4 million.'
+  citationId: 'policy_01',
+  factualClaim: 'You can get a refund up to $500.'
 });
 console.log(check1.isValid); // true
 
-// Contradiction / Hallucination
+// Case B: AI started hallucinating numbers
 const check2 = await verifier.verifyCitation({
-  citationId: 'doc_01',
-  factualClaim: 'Acme Corp Q1 revenue was 25.4 billion euros.'
+  citationId: 'policy_01',
+  factualClaim: 'Refunds are allowed for up to 90 days.'
 });
-console.log(check2.isValid); // false (rejected due to keyword mismatches)
+console.log(check2.isValid); // false (Similarity check rejected it)
 ```
 
-### 2. Symbolic Tool Validation (Zod)
+> **Note**: For production, plug in a proper NLI model or an LLM-as-a-judge (like Gemini-Flash) via the `customNLI` option in `ZGuardOptions` to get accurate semantic checks.
 
-Ensure the agent generates valid tool arguments conforming to a Zod schema before calling any external APIs.
+### 2. Blocking Bad API Calls (Zod)
+
+If your agent is running tools, you don't want it sending string fields where numbers are expected, or bypassing validation constraints.
 
 ```typescript
 import { SymbolicVerifier } from '@z-guard/core';
@@ -63,26 +68,33 @@ import { z } from 'zod';
 
 const verifier = new SymbolicVerifier();
 
-const PaymentSchema = z.object({
-  recipient: z.string().email(),
-  amount: z.number().positive(),
+// Define exactly what the tool arguments should look like
+const RefundSchema = z.object({
+  customerId: z.string().min(5),
+  amount: z.number().positive().max(500)
 });
 
-const agentResponse = {
+// The AI output requested a tool call with garbage args
+const aiResponse = {
   factualClaim: '',
   citationId: '',
-  proposedToolCall: 'sendPayment',
-  proposedToolArgs: { recipient: 'not-an-email', amount: -10 } // Violates schema!
+  proposedToolCall: 'processRefund',
+  proposedToolArgs: {
+    customerId: '123', // Too short!
+    amount: -100 // Negative!
+  }
 };
 
-const check = verifier.verifyToolCall(agentResponse, PaymentSchema);
-console.log(check.isValid); // false
-console.log(check.critique); // "Symbolic Error: Schema violation..."
+const check = verifier.verifyToolCall(aiResponse, RefundSchema);
+if (!check.isValid) {
+  console.log(check.critique); // "Symbolic Error: Schema violation..."
+  // 🛑 Block execution and tell the LLM to try again with the error details
+}
 ```
 
-### 3. Express Middleware Integration
+### 3. Integrating into Express (API Middleware)
 
-Intercept agent messages and validate them automatically in your web routers.
+You can run these checks automatically on your HTTP endpoints using the built-in middleware:
 
 ```typescript
 import express from 'express';
@@ -99,52 +111,53 @@ const SearchSchema = z.object({
 app.post(
   '/api/chat',
   zGuardMiddleware(async (req) => {
-    // Dynamically retrieve context rows
-    return [{ id: 'faq', content: 'Refunds are allowed within 30 days.' }];
+    // 1. Grab reference files dynamically based on request query
+    return [{ id: 'refund_faq', content: 'Returns allowed within 30 days.' }];
   }),
   async (req, res) => {
-    const aiOutput = req.body.text; // Text generated by LLM
+    const aiOutputText = await runLLM(req.body.prompt);
 
-    // Automatically verifies both text citations (NLI) and JSON tool args (Zod) in parallel
-    const verification = await req.zGuard.verify(aiOutput, SearchSchema);
+    // 2. Validate facts and tool parameters concurrently in parallel
+    const verification = await req.zGuard.verify(aiOutputText, SearchSchema);
 
     if (!verification.isValid) {
+      // 3. Intercepted!
       return res.status(422).json({
-        error: 'Hallucination Detected',
+        error: 'Hallucination Blocked',
         critiques: verification.critiques,
-        suggestedCorrections: verification.actionableErrors
+        fixes: verification.actionableErrors
       });
     }
 
-    res.json({ success: true, text: aiOutput });
+    res.json({ success: true, text: aiOutputText });
   }
 );
 ```
 
-### 4. Real-Time Token Streaming Parser
+### 4. Validating Streamed Tokens
 
-Validate streaming tokens from the LLM on-the-fly, pausing or terminating the stream the moment a tag is completed.
+If you are streaming LLM output to a client via Server-Sent Events, you don't have to wait for the whole paragraph to finish to validate. Use `ZGuardStreamParser` to catch and validate claims or tool calls as soon as their tags close:
 
 ```typescript
 import { ZGuardStreamParser } from '@z-guard/core';
 
 const parser = new ZGuardStreamParser({
   onClaim: (claim) => {
-    console.log('Parsed Claim:', claim); // Validated on-the-fly
+    console.log('Claim finished streaming. Validating:', claim);
   },
   onToolCall: (tool) => {
-    console.log('Parsed Tool Call:', tool); // Validated on-the-fly
+    console.log('Tool call tags closed. Running schema check:', tool);
   }
 });
 
-// Simulate incoming LLM chunks
-await parser.appendChunk('Drafting...');
-await parser.appendChunk('<claim citation="doc_01">Revenue was $15.4M</claim>');
+// Feed LLM chunks into the parser as they arrive
+await parser.appendChunk('Response: ');
+await parser.appendChunk('<claim citation="policy_01">Refund takes 5 days.</claim>');
 await parser.finalize();
 ```
 
 ---
 
-## 📝 License
+## 📄 License
 
-Licensed under the **MIT License**.
+MIT. Go ahead and use it for whatever you want.
