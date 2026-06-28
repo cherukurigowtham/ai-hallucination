@@ -11,6 +11,7 @@ from zguard import (
     SymbolicVerifier,
     ZGuardStreamParser,
     GeminiNLIVerifier,
+    verify,
 )
 
 class SendEmailSchema(BaseModel):
@@ -187,3 +188,16 @@ async def test_gemini_nli_verifier(mock_generative_model):
     result = await evaluator("Acme revenue is $15.4M", "Acme Corp Q1 revenue was 15.4 million dollars.")
     assert result["entailmentScore"] == 0.95
     assert result["reasoning"] == "Claim matched."
+
+@pytest.mark.asyncio
+async def test_verify_utility_valid():
+    result = await verify("Acme Corp Q1 revenue was 15.4 million dollars [doc_01].", sources)
+    assert result["isValid"] is True
+    assert len(result["critiques"]) == 0
+
+@pytest.mark.asyncio
+async def test_verify_utility_invalid():
+    result = await verify("Acme Corp Q1 revenue was 900 billion dollars [doc_01].", sources)
+    assert result["isValid"] is False
+    assert any("similarity ratio" in critique for critique in result["critiques"])
+

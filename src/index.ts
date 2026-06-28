@@ -529,3 +529,80 @@ export class GeminiNLIVerifier {
     };
   }
 }
+
+export interface VerifyOptions {
+  sources: GroundingSource[];
+  schema?: z.ZodTypeAny;
+  geminiApiKey?: string;
+  nliThreshold?: number;
+  customNLI?: NLIEvaluatorFn;
+}
+
+export async function verify(
+  text: string,
+  options: VerifyOptions
+): Promise<{ isValid: boolean; critiques: string[]; actionableErrors: string[] }> {
+  const claims = ZGuardParser.parseClaims(text);
+  const toolCall = ZGuardParser.parseToolCall(text);
+
+  let customNLI = options.customNLI;
+  if (!customNLI && options.geminiApiKey) {
+    const gemini = new GeminiNLIVerifier(options.geminiApiKey);
+    customNLI = gemini.createEvaluator();
+  }
+
+  const factualVerifier = new FactualVerifier(options.sources, {
+    nliThreshold: options.nliThreshold,
+    customNLI
+  });
+  const symbolicVerifier = new SymbolicVerifier();
+
+  const checkTasks: Promise<any>[] = [];
+  let overallValid = true;
+  const critiques: string[] = [];
+  const actionableErrors: string[] = [];
+
+  checkTasks.push(
+    factualVerifier.verifyAll(claims).then((factualResult) => {
+      if (!factualResult.isValid) {
+        overallValid = false;
+        for (const item of factualResult.results) {
+          if (!item.validation.isValid) {
+            critiques.push(item.validation.critique);
+            if (item.validation.actionableError) {
+              actionableErrors.push(item.validation.actionableError);
+            }
+          }
+        }
+      }
+    })
+  );
+
+  if (toolCall.toolCall && options.schema) {
+    const mockResponse: AgentResponse = {
+      factualClaim: '',
+      citationId: '',
+      proposedToolCall: toolCall.toolCall,
+      proposedToolArgs: toolCall.toolArgs
+    };
+    checkTasks.push(
+      Promise.resolve(symbolicVerifier.verifyToolCall(mockResponse, options.schema)).then((symbolicResult) => {
+        if (!symbolicResult.isValid) {
+          overallValid = false;
+          critiques.push(symbolicResult.critique);
+          if (symbolicResult.actionableError) {
+            actionableErrors.push(symbolicResult.actionableError);
+          }
+        }
+      })
+    );
+  }
+
+  await Promise.all(checkTasks);
+
+  return {
+    isValid: overallValid,
+    critiques,
+    actionableErrors
+  };
+}

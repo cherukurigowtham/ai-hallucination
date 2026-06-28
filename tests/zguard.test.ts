@@ -31,6 +31,7 @@ import {
   ZGuardParser,
   ZGuardStreamParser,
   GeminiNLIVerifier,
+  verify,
   GroundingSource
 } from '../src/index.js';
 
@@ -306,6 +307,27 @@ describe('Z-Guard Core Suite', () => {
 
       expect(result.entailmentScore).toBe(0.9);
       expect(result.reasoning).toBe('The claim is supported.');
+    });
+  });
+
+  // ==========================================
+  // 6. verify Utility Tests
+  // ==========================================
+  describe('verify utility', () => {
+    it('should run end-to-end checks in a single function call', async () => {
+      const result = await verify('Acme Corp Q1 revenue was 15.4 million dollars [doc_01].', {
+        sources
+      });
+      expect(result.isValid).toBe(true);
+      expect(result.critiques).toHaveLength(0);
+    });
+
+    it('should catch factual discrepancies and validation errors in a single call', async () => {
+      const result = await verify('Acme Corp Q1 revenue was 900 billion dollars [doc_01].', {
+        sources
+      });
+      expect(result.isValid).toBe(false);
+      expect(result.critiques[0]).toContain('similarity ratio is too low');
     });
   });
 });
