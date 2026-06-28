@@ -1,47 +1,28 @@
 # Z-Guard
 
-The Open-Source Runtime Factual Grounding and Symbolic Verification Engine for Agentic AI.
+Z-Guard is a neuro-symbolic factual verification and hallucination mitigation engine designed specifically for Agentic AI workflows. It protects production applications by verifying natural language claims and enforcing strict parameter types on tool calls before they execute.
 
-Z-Guard is a lightweight, neuro-symbolic safety and compliance layer designed for autonomous AI agent workflows. It intercepts generative outputs at runtime to guarantee factual alignment with grounding contexts and execution safety for tool invocations before they reach end users or backend APIs.
+## Core Capabilities
 
-Z-Guard is available for both **Node.js (TypeScript/JavaScript)** and **Python** environments.
+*   **Factual Alignment (Neural)**: Validates generated claims against grounding documents using Natural Language Inference (NLI). Out-of-the-box support is included for Gemini, OpenAI, Anthropic, DeepSeek, Groq, Mistral, and local Ollama models.
+*   **Symbolic Parameter Checking**: Evaluates LLM tool-calling payloads against schemas (Zod in JavaScript, Pydantic in Python) to block malformed arguments.
+*   **Early Stream Aborting**: Parses tokens in real-time as they stream. If a verification check fails, Z-Guard stops the stream immediately to save API costs and prevent output leaks.
+*   **Self-Correction Feedback**: Translates validation exceptions into clear feedback so your AI agent can debug and correct its parameters programmatically.
+*   **Schema-to-Prompt Compiler**: Automatically compiles Zod or Pydantic schemas into exact prompt instructions for your LLM, guiding output structure before generation begins.
 
----
+## Repository Structure
 
-## Key Capabilities
+*   `bin/`: CLI tools for terminal verification and local workspace scaffolding.
+*   `example/`: Express server templates, LangChain custom parsers, and runnable agent self-correction loop scripts.
+*   `src/`: Node.js and TypeScript core library and verifiers.
+*   `tests/`: Core Vitest assertions.
+*   `zguard-python/`: The complete Python implementation package, containing:
+    *   `zguard/`: Factual, Symbolic, and Multi-Model verifiers, alongside FastAPI dependencies.
+    *   `example/`: FastAPI server setups and CrewAI task callback blueprints.
+    *   `tests/`: Complete Pytest unit test coverage.
 
-*   **Dual-Path Verification (DPV)**: Validates natural language claims and structured tool calls in parallel to minimize response latency.
-*   **Factual Entailment (NLI)**: Evaluates if agent assertions are logically entailed by retrieved grounding context documents, featuring a built-in Gemini-powered NLI verifier and a fallback token-overlap heuristic.
-*   **Symbolic Validation**: Enforces strict schema compliance (using Zod in Node.js and Pydantic in Python) for proposed tool calls and arguments to block parameter-level hallucinations.
-*   **Real-Time Token Streaming Parser**: Processes streamed token outputs on-the-fly, allowing validation checks to execute as soon as tag closures are detected.
-*   **Middleware & Route Dependencies**: Mounts seamlessly as route middleware (Express in Node.js, FastAPI in Python) to validate outputs inline.
+## Getting Started
 
----
-
-## Package Locations
-
-Z-Guard is structured as a multi-language repository:
-
-### 🟢 Node.js / TypeScript
-The Node.js package is located in the repository root directory.
-*   **Source Entrypoint**: [src/index.ts](file:///Users/gowthamcherukuri/.gemini/antigravity/worktrees/hallucinations/research-mitigate-ai-hallucinations/zguard/src/index.ts)
-*   **Runnable Express Example**: [example/server.js](file:///Users/gowthamcherukuri/.gemini/antigravity/worktrees/hallucinations/research-mitigate-ai-hallucinations/zguard/example/server.js)
-*   **Vitest Test Suite**: [tests/zguard.test.ts](file:///Users/gowthamcherukuri/.gemini/antigravity/worktrees/hallucinations/research-mitigate-ai-hallucinations/zguard/tests/zguard.test.ts)
-
-### 🟢 Python
-The Python package is located in the `zguard-python` subdirectory.
-*   **Python Readme**: [zguard-python/README.md](file:///Users/gowthamcherukuri/.gemini/antigravity/worktrees/hallucinations/research-mitigate-ai-hallucinations/zguard/zguard-python/README.md)
-*   **Runnable FastAPI Example**: [zguard-python/example/server.py](file:///Users/gowthamcherukuri/.gemini/antigravity/worktrees/hallucinations/research-mitigate-ai-hallucinations/zguard/zguard-python/example/server.py)
-*   **Pytest Test Suite**: [zguard-python/tests/test_zguard.py](file:///Users/gowthamcherukuri/.gemini/antigravity/worktrees/hallucinations/research-mitigate-ai-hallucinations/zguard/zguard-python/tests/test_zguard.py)
-
----
-
-## Contributing
-
-We welcome community contributions in both languages. For guidelines on setting up local environments, running test suites, and opening Pull Requests, please review our [CONTRIBUTING.md](file:///Users/gowthamcherukuri/.gemini/antigravity/worktrees/hallucinations/research-mitigate-ai-hallucinations/zguard/CONTRIBUTING.md) guide.
-
----
-
-## License
-
-Z-Guard is open-source software licensed under the [MIT License](file:///Users/gowthamcherukuri/.gemini/antigravity/worktrees/hallucinations/research-mitigate-ai-hallucinations/zguard/LICENSE).
+1. Install the package dependencies in either the JS or Python directories.
+2. Initialize a local safety proxy server in your project folder using the CLI command: `zguard init`. This instantly creates a pre-configured server template (`zguard-server.js` or `zguard_server.py`) and a default grounding database (`sources.json`) in your directory.
+3. Start the server and send payloads to the validation route to verify agent actions.
