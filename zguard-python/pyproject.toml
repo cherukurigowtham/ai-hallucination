@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=61.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "zguard"
+version = "1.0.0"
+description = "A lightweight, neuro-symbolic hallucination mitigation and verification library for Agentic AI workflows."
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "pydantic>=2.0",
+    "google-generativeai>=0.3.0",
+    "fastapi>=0.100.0",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
