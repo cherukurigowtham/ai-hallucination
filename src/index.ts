@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 // ==========================================
 // 1. Types and Interfaces
@@ -470,4 +471,61 @@ export function zGuardMiddleware(
       next(err);
     }
   };
+}
+
+// ==========================================
+// 6. Gemini NLI Verifier
+// ==========================================
+
+export class GeminiNLIVerifier {
+  private ai: GoogleGenerativeAI;
+  private modelName: string;
+
+  constructor(apiKey: string, modelName: string = 'gemini-1.5-flash') {
+    this.ai = new GoogleGenerativeAI(apiKey);
+    this.modelName = modelName;
+  }
+
+  /**
+   * Creates an NLIEvaluatorFn that can be passed to FactualVerifier's customNLI option.
+   */
+  createEvaluator(): NLIEvaluatorFn {
+    return async (claim: string, premise: string) => {
+      const model = this.ai.getGenerativeModel({
+        model: this.modelName,
+        generationConfig: { responseMimeType: 'application/json' }
+      });
+
+      const prompt = `
+        You are an objective factual verification judge.
+        Analyze if the following Premise logically entails the Hypothesis (i.e. the claim is fully supported by the premise without any external extrapolation or contradictions).
+
+        Premise: "${premise}"
+        Hypothesis: "${claim}"
+
+        Respond with a JSON object containing:
+        - entailmentScore: a float between 0.0 (contradictory/unsupported) and 1.0 (fully supported/entailed)
+        - reasoning: a brief explanation of the score.
+      `;
+
+      const result = await model.generateContent(prompt);
+      const text = result.response.text();
+      
+      try {
+        const parsed = JSON.parse(text);
+        return {
+          entailmentScore: Number(parsed.entailmentScore ?? 0),
+          reasoning: parsed.reasoning ?? ''
+        };
+      } catch (err) {
+        // Fallback if JSON format was violated or parsing failed
+        const scoreMatch = text.match(/"entailmentScore"\s*:\s*([0-9.]+)/);
+        const entailmentScore = scoreMatch ? parseFloat(scoreMatch[1]) : 0;
+        return {
+          entailmentScore,
+          reasoning: 'Failed to parse JSON response, extracted score from text.'
+        };
+      }
+    };
+  }
 }

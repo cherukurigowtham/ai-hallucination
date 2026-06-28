@@ -1,10 +1,36 @@
 import { describe, it, expect, vi } from 'vitest';
 import { z } from 'zod';
+
+// Mock Google Generative AI SDK
+vi.mock('@google/generative-ai', () => {
+  const generateContentMock = vi.fn().mockResolvedValue({
+    response: {
+      text: () => JSON.stringify({
+        entailmentScore: 0.9,
+        reasoning: 'The claim is supported.'
+      })
+    }
+  });
+
+  const getGenerativeModelMock = vi.fn().mockReturnValue({
+    generateContent: generateContentMock
+  });
+
+  return {
+    GoogleGenerativeAI: vi.fn().mockImplementation(() => {
+      return {
+        getGenerativeModel: getGenerativeModelMock
+      };
+    })
+  };
+});
+
 import {
   FactualVerifier,
   SymbolicVerifier,
   ZGuardParser,
   ZGuardStreamParser,
+  GeminiNLIVerifier,
   GroundingSource
 } from '../src/index.js';
 
@@ -265,6 +291,21 @@ describe('Z-Guard Core Suite', () => {
       expect(toolsParsed).toHaveLength(1);
       expect(toolsParsed[0].toolCall).toBe('sendEmail');
       expect(toolsParsed[0].toolArgs.to).toBe('test@example.com');
+    });
+  });
+
+  // ==========================================
+  // 5. GeminiNLIVerifier Tests
+  // ==========================================
+  describe('GeminiNLIVerifier', () => {
+    it('should successfully compile the prompt and parse structured JSON responses', async () => {
+      const verifier = new GeminiNLIVerifier('mock-api-key');
+      const evaluator = verifier.createEvaluator();
+
+      const result = await evaluator('Acme revenue is $15.4M', 'Acme Corp Q1 revenue was 15.4 million dollars.');
+
+      expect(result.entailmentScore).toBe(0.9);
+      expect(result.reasoning).toBe('The claim is supported.');
     });
   });
 });

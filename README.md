@@ -9,7 +9,7 @@ Z-Guard is a lightweight, zero-dependency safety and compliance layer designed f
 ## Key Capabilities
 
 *   **Dual-Path Verification (DPV)**: Validates natural language claims and structured tool calls in parallel to minimize response latency.
-*   **Factual Entailment (NLI)**: Evaluates if agent assertions are logically entailed by retrieved grounding context documents, with a fallback token-overlap heuristic.
+*   **Factual Entailment (NLI)**: Evaluates if agent assertions are logically entailed by retrieved grounding context documents, featuring a built-in Gemini-powered NLI verifier and a fallback token-overlap heuristic.
 *   **Symbolic Validation (Zod)**: Enforces strict schema compliance for proposed tool calls and arguments to block parameter-level hallucinations.
 *   **Real-Time Token Streaming Parser**: Processes streamed token outputs on-the-fly, allowing validation checks to execute as soon as tag closures are detected.
 *   **Express Middleware**: Mounts seamlessly as routing-layer middleware to validate outputs inline.
