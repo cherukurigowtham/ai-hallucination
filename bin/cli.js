@@ -24,6 +24,62 @@ Options:
 
 async function run() {
   const args = process.argv.slice(2);
+
+  // Scaffolding command check
+  if (args[0] === 'init') {
+    const serverCode = `const express = require('express');
+const { z } = require('zod');
+const { zGuardMiddleware } = require('@z-guard/core');
+const fs = require('fs');
+
+const app = express();
+app.use(express.json());
+
+// Load grounding sources
+const sources = JSON.parse(fs.readFileSync('sources.json', 'utf8'));
+
+// Define validation schema for tool call
+const SendEmailSchema = z.object({
+  to: z.string().email(),
+  subject: z.string()
+});
+
+app.post('/verify', zGuardMiddleware(sources), async (req, res) => {
+  const result = await req.zGuard.verify(req.body.text, SendEmailSchema);
+  if (!result.isValid) {
+    return res.status(400).json({
+      error: 'Hallucination Blocked',
+      critiques: result.critiques,
+      actionableErrors: result.actionableErrors
+    });
+  }
+  res.json({ status: 'success', message: 'Outputs successfully verified.' });
+});
+
+app.listen(8000, () => {
+  console.log('🛡️ Z-Guard Safety Proxy Server listening on port 8000');
+});
+`;
+
+    const sourcesCode = `[
+  {
+    "id": "doc_01",
+    "content": "Acme Corp Q1 revenue was 15.4 million dollars."
+  }
+]
+`;
+
+    fs.writeFileSync(path.join(process.cwd(), 'zguard-server.js'), serverCode, 'utf8');
+    fs.writeFileSync(path.join(process.cwd(), 'sources.json'), sourcesCode, 'utf8');
+
+    console.log('🛡️ Z-Guard successfully scaffolded!');
+    console.log('  - Generated: zguard-server.js');
+    console.log('  - Generated: sources.json');
+    console.log('\nRun your safety server:');
+    console.log('  node zguard-server.js');
+    process.exit(0);
+  }
+
   const params = {};
 
   for (let i = 0; i < args.length; i++) {
