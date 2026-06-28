@@ -4,7 +4,7 @@ from .factual import FactualVerifier
 from .symbolic import SymbolicVerifier
 from .stream import ZGuardStreamParser
 from .gemini import GeminiNLIVerifier
-from .middleware import zguard_middleware
+from .middleware import zguard_middleware, ZGuardContext
 
 __all__ = [
     "GroundingSource",
@@ -16,4 +16,5 @@ __all__ = [
     "ZGuardStreamParser",
     "GeminiNLIVerifier",
     "zguard_middleware",
+    "ZGuardContext",
 ]
