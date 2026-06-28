@@ -22,3 +22,6 @@ dependencies = [
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+
+[project.scripts]
+zguard = "zguard.cli:main"
