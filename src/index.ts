@@ -759,3 +759,48 @@ export class AnthropicNLIVerifier {
     };
   }
 }
+
+export function generateToolInstructions(name: string, schema: z.ZodObject<any>): string {
+  const shape = schema.shape;
+  const fields: string[] = [];
+
+  for (const key in shape) {
+    const fieldType = shape[key];
+    let typeName = 'any';
+    let isOptional = false;
+    let description = '';
+
+    let innerType = fieldType;
+    if (fieldType instanceof z.ZodOptional) {
+      innerType = fieldType._def.innerType;
+      isOptional = true;
+    }
+
+    if (innerType instanceof z.ZodString) {
+      typeName = 'string';
+    } else if (innerType instanceof z.ZodNumber) {
+      typeName = 'number';
+    } else if (innerType instanceof z.ZodBoolean) {
+      typeName = 'boolean';
+    } else if (innerType instanceof z.ZodArray) {
+      typeName = 'array';
+    } else if (innerType instanceof z.ZodEnum) {
+      typeName = `enum (${innerType._def.values.join('|')})`;
+    }
+
+    if (innerType.description) {
+      description = ` - ${innerType.description}`;
+    }
+
+    fields.push(`"${key}": <${typeName}>${isOptional ? ' [Optional]' : ''}${description}`);
+  }
+
+  return `To invoke the tool "${name}", you MUST append the following block to your response:
+<tool name="${name}">
+{
+  ${fields.join(',\n  ')}
+}
+</tool>
+
+Strict formatting rule: Output ONLY the XML tags and JSON content for tool calls as shown. Do not wrap in markdown code blocks.`;
+}

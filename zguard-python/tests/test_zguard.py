@@ -15,6 +15,7 @@ from zguard import (
     OpenAINLIVerifier,
     AnthropicNLIVerifier,
     verify,
+    generate_tool_instructions,
 )
 
 class SendEmailSchema(BaseModel):
@@ -241,5 +242,16 @@ async def test_anthropic_nli_verifier(mock_urlopen):
 
     assert result["entailmentScore"] == 0.90
     assert result["reasoning"] == "Claude matches."
+
+def test_generate_tool_instructions():
+    class SendEmail(BaseModel):
+        to: str = Field(..., description="recipient email")
+        subject: str
+
+    prompt = generate_tool_instructions("sendEmail", SendEmail)
+    assert 'To invoke the tool "sendEmail"' in prompt
+    assert '"to": <str> - recipient email' in prompt
+    assert '"subject": <str>' in prompt
+
 
 

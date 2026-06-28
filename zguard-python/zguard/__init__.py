@@ -7,6 +7,7 @@ from .gemini import GeminiNLIVerifier
 from .providers import OpenAINLIVerifier, AnthropicNLIVerifier
 from .middleware import zguard_middleware, ZGuardContext
 from .verify import verify
+from .prompt import generate_tool_instructions
 
 __all__ = [
     "GroundingSource",
@@ -22,4 +23,5 @@ __all__ = [
     "zguard_middleware",
     "ZGuardContext",
     "verify",
+    "generate_tool_instructions",
 ]

@@ -34,6 +34,7 @@ import {
   OpenAINLIVerifier,
   AnthropicNLIVerifier,
   verify,
+  generateToolInstructions,
   GroundingSource
 } from '../src/index.js';
 
@@ -374,6 +375,23 @@ describe('Z-Guard Core Suite', () => {
 
       expect(result.entailmentScore).toBe(0.92);
       expect(result.reasoning).toBe('Claude match.');
+    });
+  });
+
+  // ==========================================
+  // 9. generateToolInstructions Tests
+  // ==========================================
+  describe('generateToolInstructions', () => {
+    it('should compile Zod object to exact XML instructions', () => {
+      const schema = z.object({
+        to: z.string().describe('recipient email'),
+        subject: z.string()
+      });
+      const prompt = generateToolInstructions('sendEmail', schema);
+
+      expect(prompt).toContain('To invoke the tool "sendEmail"');
+      expect(prompt).toContain('"to": <string> - recipient email');
+      expect(prompt).toContain('"subject": <string>');
     });
   });
 });
