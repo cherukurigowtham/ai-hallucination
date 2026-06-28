@@ -4,6 +4,7 @@ from .factual import FactualVerifier
 from .symbolic import SymbolicVerifier
 from .stream import ZGuardStreamParser
 from .gemini import GeminiNLIVerifier
+from .providers import OpenAINLIVerifier, AnthropicNLIVerifier
 from .middleware import zguard_middleware, ZGuardContext
 from .verify import verify
 
@@ -16,6 +17,8 @@ __all__ = [
     "SymbolicVerifier",
     "ZGuardStreamParser",
     "GeminiNLIVerifier",
+    "OpenAINLIVerifier",
+    "AnthropicNLIVerifier",
     "zguard_middleware",
     "ZGuardContext",
     "verify",

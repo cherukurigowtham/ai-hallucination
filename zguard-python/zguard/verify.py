@@ -6,12 +6,18 @@ from .parser import ZGuardParser
 from .factual import FactualVerifier
 from .symbolic import SymbolicVerifier
 from .gemini import GeminiNLIVerifier
+from .providers import OpenAINLIVerifier, AnthropicNLIVerifier
 
 async def verify(
     text: str,
     sources: List[GroundingSource],
     schema: Optional[Type[BaseModel]] = None,
     gemini_api_key: Optional[str] = None,
+    openai_api_key: Optional[str] = None,
+    anthropic_api_key: Optional[str] = None,
+    openai_base_url: Optional[str] = None,
+    openai_model_name: Optional[str] = None,
+    anthropic_model_name: Optional[str] = None,
     nli_threshold: float = 0.8,
     custom_nli: Optional[NLIEvaluatorFn] = None,
 ) -> Dict[str, Any]:
@@ -22,9 +28,23 @@ async def verify(
     tool_call = ZGuardParser.parse_tool_call(text)
 
     nli_eval = custom_nli
-    if not nli_eval and gemini_api_key:
-        gemini = GeminiNLIVerifier(api_key=gemini_api_key)
-        nli_eval = gemini.create_evaluator()
+    if not nli_eval:
+        if gemini_api_key:
+            gemini = GeminiNLIVerifier(api_key=gemini_api_key)
+            nli_eval = gemini.create_evaluator()
+        elif openai_api_key:
+            openai = OpenAINLIVerifier(
+                api_key=openai_api_key,
+                base_url=openai_base_url or 'https://api.openai.com/v1',
+                model_name=openai_model_name or 'gpt-4o-mini'
+            )
+            nli_eval = openai.create_evaluator()
+        elif anthropic_api_key:
+            anthropic = AnthropicNLIVerifier(
+                api_key=anthropic_api_key,
+                model_name=anthropic_model_name or 'claude-3-5-sonnet-latest'
+            )
+            nli_eval = anthropic.create_evaluator()
 
     factual_verifier = FactualVerifier(sources, nli_threshold, nli_eval)
     symbolic_verifier = SymbolicVerifier()

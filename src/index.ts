@@ -534,6 +534,11 @@ export interface VerifyOptions {
   sources: GroundingSource[];
   schema?: z.ZodTypeAny;
   geminiApiKey?: string;
+  openAIApiKey?: string;
+  anthropicApiKey?: string;
+  openaiBaseURL?: string;
+  openaiModelName?: string;
+  anthropicModelName?: string;
   nliThreshold?: number;
   customNLI?: NLIEvaluatorFn;
 }
@@ -546,9 +551,20 @@ export async function verify(
   const toolCall = ZGuardParser.parseToolCall(text);
 
   let customNLI = options.customNLI;
-  if (!customNLI && options.geminiApiKey) {
-    const gemini = new GeminiNLIVerifier(options.geminiApiKey);
-    customNLI = gemini.createEvaluator();
+  if (!customNLI) {
+    if (options.geminiApiKey) {
+      const gemini = new GeminiNLIVerifier(options.geminiApiKey);
+      customNLI = gemini.createEvaluator();
+    } else if (options.openAIApiKey) {
+      const openai = new OpenAINLIVerifier(options.openAIApiKey, {
+        baseURL: options.openaiBaseURL,
+        modelName: options.openaiModelName
+      });
+      customNLI = openai.createEvaluator();
+    } else if (options.anthropicApiKey) {
+      const anthropic = new AnthropicNLIVerifier(options.anthropicApiKey, options.anthropicModelName);
+      customNLI = anthropic.createEvaluator();
+    }
   }
 
   const factualVerifier = new FactualVerifier(options.sources, {
@@ -605,4 +621,141 @@ export async function verify(
     critiques,
     actionableErrors
   };
+}
+
+// ==========================================
+// 7. OpenAI NLI Verifier (Supports OpenAI, Groq, DeepSeek, Ollama)
+// ==========================================
+
+export class OpenAINLIVerifier {
+  private apiKey: string;
+  private baseURL: string;
+  private modelName: string;
+
+  constructor(apiKey: string, options: { baseURL?: string; modelName?: string } = {}) {
+    this.apiKey = apiKey;
+    this.baseURL = options.baseURL ?? 'https://api.openai.com/v1';
+    this.modelName = options.modelName ?? 'gpt-4o-mini';
+  }
+
+  createEvaluator(): NLIEvaluatorFn {
+    return async (claim: string, premise: string) => {
+      const prompt = `
+        You are an objective factual verification judge.
+        Analyze if the following Premise logically entails the Hypothesis (i.e. the claim is fully supported by the premise without any external extrapolation or contradictions).
+
+        Premise: "${premise}"
+        Hypothesis: "${claim}"
+
+        Respond with a JSON object containing:
+        - entailmentScore: a float between 0.0 (contradictory/unsupported) and 1.0 (fully supported/entailed)
+        - reasoning: a brief explanation of the score.
+      `;
+
+      const response = await fetch(`${this.baseURL}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.apiKey}`
+        },
+        body: JSON.stringify({
+          model: this.modelName,
+          messages: [
+            { role: 'user', content: prompt }
+          ],
+          response_format: { type: 'json_object' }
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`OpenAI API request failed: ${response.statusText}`);
+      }
+
+      const data: any = await response.json();
+      const text = data.choices?.[0]?.message?.content ?? '';
+
+      try {
+        const parsed = JSON.parse(text);
+        return {
+          entailmentScore: Number(parsed.entailmentScore ?? 0),
+          reasoning: parsed.reasoning ?? ''
+        };
+      } catch (err) {
+        const scoreMatch = text.match(/"entailmentScore"\s*:\s*([0-9.]+)/);
+        const entailmentScore = scoreMatch ? parseFloat(scoreMatch[1]) : 0;
+        return {
+          entailmentScore,
+          reasoning: 'Failed to parse JSON response, extracted score from text.'
+        };
+      }
+    };
+  }
+}
+
+// ==========================================
+// 8. Anthropic NLI Verifier (Supports Claude models)
+// ==========================================
+
+export class AnthropicNLIVerifier {
+  private apiKey: string;
+  private modelName: string;
+
+  constructor(apiKey: string, modelName: string = 'claude-3-5-sonnet-latest') {
+    this.apiKey = apiKey;
+    this.modelName = modelName;
+  }
+
+  createEvaluator(): NLIEvaluatorFn {
+    return async (claim: string, premise: string) => {
+      const prompt = `
+        You are an objective factual verification judge.
+        Analyze if the following Premise logically entails the Hypothesis (i.e. the claim is fully supported by the premise without any external extrapolation or contradictions).
+
+        Premise: "${premise}"
+        Hypothesis: "${claim}"
+
+        Respond with a JSON object containing:
+        - entailmentScore: a float between 0.0 (contradictory/unsupported) and 1.0 (fully supported/entailed)
+        - reasoning: a brief explanation of the score.
+      `;
+
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': this.apiKey,
+          'anthropic-version': '2023-06-01'
+        },
+        body: JSON.stringify({
+          model: this.modelName,
+          max_tokens: 1000,
+          messages: [
+            { role: 'user', content: prompt }
+          ]
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Anthropic API request failed: ${response.statusText}`);
+      }
+
+      const data: any = await response.json();
+      const text = data.content?.[0]?.text ?? '';
+
+      try {
+        const parsed = JSON.parse(text);
+        return {
+          entailmentScore: Number(parsed.entailmentScore ?? 0),
+          reasoning: parsed.reasoning ?? ''
+        };
+      } catch (err) {
+        const scoreMatch = text.match(/"entailmentScore"\s*:\s*([0-9.]+)/);
+        const entailmentScore = scoreMatch ? parseFloat(scoreMatch[1]) : 0;
+        return {
+          entailmentScore,
+          reasoning: 'Failed to parse JSON response, extracted score from text.'
+        };
+      }
+    };
+  }
 }

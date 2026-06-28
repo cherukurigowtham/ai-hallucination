@@ -1,5 +1,6 @@
 import pytest
 import asyncio
+import json
 from typing import Optional
 from unittest.mock import AsyncMock, MagicMock, patch
 from pydantic import BaseModel, Field
@@ -11,6 +12,8 @@ from zguard import (
     SymbolicVerifier,
     ZGuardStreamParser,
     GeminiNLIVerifier,
+    OpenAINLIVerifier,
+    AnthropicNLIVerifier,
     verify,
 )
 
@@ -200,4 +203,43 @@ async def test_verify_utility_invalid():
     result = await verify("Acme Corp Q1 revenue was 900 billion dollars [doc_01].", sources)
     assert result["isValid"] is False
     assert any("similarity ratio" in critique for critique in result["critiques"])
+
+@pytest.mark.asyncio
+@patch("urllib.request.urlopen")
+async def test_openai_nli_verifier(mock_urlopen):
+    mock_response = MagicMock()
+    mock_response.read.return_value = json.dumps({
+        "choices": [{
+            "message": {
+                "content": '{"entailmentScore": 0.85, "reasoning": "Matches premise."}'
+            }
+        }]
+    }).encode("utf-8")
+    mock_urlopen.return_value.__enter__.return_value = mock_response
+
+    verifier = OpenAINLIVerifier(api_key="mock-key")
+    evaluator = verifier.create_evaluator()
+    result = await evaluator("claim", "premise")
+
+    assert result["entailmentScore"] == 0.85
+    assert result["reasoning"] == "Matches premise."
+
+@pytest.mark.asyncio
+@patch("urllib.request.urlopen")
+async def test_anthropic_nli_verifier(mock_urlopen):
+    mock_response = MagicMock()
+    mock_response.read.return_value = json.dumps({
+        "content": [{
+            "text": '{"entailmentScore": 0.90, "reasoning": "Claude matches."}'
+        }]
+    }).encode("utf-8")
+    mock_urlopen.return_value.__enter__.return_value = mock_response
+
+    verifier = AnthropicNLIVerifier(api_key="mock-key")
+    evaluator = verifier.create_evaluator()
+    result = await evaluator("claim", "premise")
+
+    assert result["entailmentScore"] == 0.90
+    assert result["reasoning"] == "Claude matches."
+
 

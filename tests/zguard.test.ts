@@ -31,6 +31,8 @@ import {
   ZGuardParser,
   ZGuardStreamParser,
   GeminiNLIVerifier,
+  OpenAINLIVerifier,
+  AnthropicNLIVerifier,
   verify,
   GroundingSource
 } from '../src/index.js';
@@ -328,6 +330,50 @@ describe('Z-Guard Core Suite', () => {
       });
       expect(result.isValid).toBe(false);
       expect(result.critiques[0]).toContain('similarity ratio is too low');
+    });
+  });
+
+  // ==========================================
+  // 7. OpenAINLIVerifier Tests
+  // ==========================================
+  describe('OpenAINLIVerifier', () => {
+    it('should successfully post chat completion and parse JSON responses', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          choices: [{ message: { content: '{"entailmentScore": 0.85, "reasoning": "OpenAI match."}' } }]
+        })
+      });
+      global.fetch = mockFetch;
+
+      const verifier = new OpenAINLIVerifier('mock-api-key');
+      const evaluator = verifier.createEvaluator();
+      const result = await evaluator('claim', 'premise');
+
+      expect(result.entailmentScore).toBe(0.85);
+      expect(result.reasoning).toBe('OpenAI match.');
+    });
+  });
+
+  // ==========================================
+  // 8. AnthropicNLIVerifier Tests
+  // ==========================================
+  describe('AnthropicNLIVerifier', () => {
+    it('should successfully post message completion and parse JSON responses', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          content: [{ text: '{"entailmentScore": 0.92, "reasoning": "Claude match."}' }]
+        })
+      });
+      global.fetch = mockFetch;
+
+      const verifier = new AnthropicNLIVerifier('mock-api-key');
+      const evaluator = verifier.createEvaluator();
+      const result = await evaluator('claim', 'premise');
+
+      expect(result.entailmentScore).toBe(0.92);
+      expect(result.reasoning).toBe('Claude match.');
     });
   });
 });
